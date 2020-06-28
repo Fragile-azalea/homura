@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 
-from .base import Callback
+from .base import Callback, CallbackList
 from ..utils._vocabulary import *
 from ..utils.environment import get_git_hash, get_args
 
@@ -12,7 +12,6 @@ Path.remove = lambda self: os.remove(self)
 
 class WeightSave(Callback):
     """ Save weights after every epoch
-
     :param save_path: path to be saved
     :param save_freq: frequency of saving in epoch. If -1, saved by `after_all`.
     """
@@ -61,3 +60,32 @@ class WeightSave(Callback):
 
     def after_all(self, data: Mapping):
         self.save(data, "weight.pkl")
+
+
+class BestAccuracyWeightSave(WeightSave):
+    """ Save weights after every epoch
+
+    :param save_path: path to be saved
+    :param save_freq: frequency of saving in epoch. If -1, saved by `after_all`.
+    """
+    master_only = True
+
+    def __init__(self,
+                 save_path: str or Path):
+        super(BestAccuracyWeightSave, self).__init__(save_path)
+        self._max_accuracy = -1.0
+
+    def register_callbacks(self,
+                           callbacks: CallbackList):
+        self.callbacks = callbacks
+
+    def after_epoch(self, data: Mapping):
+        results = self.callbacks.after_epoch(data)
+        if data[MODE] == TEST:
+            accuracy_test = results['accuracy_test'].item()
+            if accuracy_test > self._max_accuracy:
+                self._max_accuracy = accuracy_test
+                self.save(data, "best.pkl")
+
+    def after_all(self, data: Mapping):
+        pass
