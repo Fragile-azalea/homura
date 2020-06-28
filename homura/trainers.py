@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from homura import is_distributed, is_horovod_available
 from homura.liblog import get_logger, _set_tqdm_print
-from .callbacks import Callback, CallbackList, WeightSave
+from .callbacks import Callback, CallbackList, WeightSave, BestAccuracyWeightSave
 from .callbacks.base import _NoOpCallback
 from .callbacks.reporters import _ReporterBase
 from .utils._vocabulary import *
@@ -494,6 +494,9 @@ class TrainerBase(metaclass=ABCMeta):
         _inners = CallbackList(_inners)
         for r in _reporters:
             r.register_callbacks(_inners)
+        for o in _outers:
+            if isinstance(o, BestAccuracyWeightSave):
+                o.register_callbacks(_inners)
         self._callbacks = CallbackList(_reporters + _outers)
 
 
