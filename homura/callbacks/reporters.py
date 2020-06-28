@@ -116,10 +116,12 @@ class TQDMReporter(Reporter):
                  verb: bool = False):
 
         super(TQDMReporter, self).__init__()
-        self.writer = tqdm.tqdm(iterator, ncols=80) if is_master() else iterator
+        self.writer = tqdm.tqdm(
+            iterator, dynamic_ncols=True) if is_master() else iterator
         self._verb = verb
         self._logger = liblog.get_logger(__name__)
         self._length = len(iterator)
+        self._max_accuracy = -1.0
         liblog._set_tqdm_handler()
         liblog._set_tqdm_print()
 
@@ -140,11 +142,17 @@ class TQDMReporter(Reporter):
         reportable = {}
         results = super(TQDMReporter, self).after_epoch(data)
         if is_master():
+            if data[MODE] == TEST:
+                accuracy_test = self.to_serializable(results['accuracy_test'])
+                if accuracy_test > self._max_accuracy:
+                    self._max_accuracy = accuracy_test
+                reportable['best'] = self._max_accuracy
             for k, v in results.items():
                 if self._is_scalar(v):
                     reportable[k] = self.to_serializable(v)
                 elif isinstance(v, dict):
-                    reportable.update({k: self.to_serializable(e) for k, e in v.items()})
+                    reportable.update({k: self.to_serializable(e)
+                                       for k, e in v.items()})
             self.writer.set_postfix(reportable)
             if self._verb:
                 log = ""
@@ -203,7 +211,8 @@ class TensorboardReporter(Reporter):
         elif isinstance(v, dict):
             self.writer.add_scalars(k, v, global_step)
         elif self._is_vector(v):
-            self.writer.add_scalars(k, {str(i): e for i, e in enumerate(v)}, global_step)
+            self.writer.add_scalars(
+                k, {str(i): e for i, e in enumerate(v)}, global_step)
 
 
 class IOReporter(Reporter):
@@ -262,7 +271,8 @@ class CallImage(Callback):
                         data: Mapping):
         if data[ITERATION] == 0:
             if data.get(self.key) is None:
-                raise RuntimeError(f"key for image `{self.key}` is not found in `data`")
+                raise RuntimeError(
+                    f"key for image `{self.key}` is not found in `data`")
         if self.report_freq is None:
             # epochwise, because `data` of `after_epoch` does not have images
             if data[ITERATION] % data[ITER_PER_EPOCH] != data[ITER_PER_EPOCH] - 1:
